@@ -1,0 +1,1 @@
+https://pymupdf.readthedocs.io/en/latest/recipes-annotations.html#annotations
