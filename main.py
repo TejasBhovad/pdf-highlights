@@ -12,39 +12,44 @@ doc = pymupdf.open(input_path)
 output_path = "output/"
 
 highlighted_text = {}
-WORD_BUFFER = 5
-
-# Define the color definitions
-color_definitions = {
-    'Red': [1.0, 0.0, 0.0],
-    'Yellow': [1.0, 1.0, 0.0],
-    'Pink': [1.0, 0.5, 0.5],
-    'Green': [0.0, 1.0, 0.0]
-}
-
-# Loop through each page
-for page_index in range(len(doc)):
-    page = doc[page_index]
-    # Check if the page has annotations
-    if page.annots():
-        for annot in page.annots():
-            # print(annot)
-            text = page.get_text("words", clip=annot.rect)
-            # print(highlighted_text)
-            text = " ".join([word[4] for word in text])
-            # Add the highlighted text and page number to the dictionary
-            if text not in highlighted_text:
-                highlighted_text[text] = [page_index + 1]
-            else:
-                highlighted_text[text].append(page_index + 1)
 
 
-# from dict create df where all rows have same pg no and content appeneded
-highlighted_text_df = pd.DataFrame(columns=["Page", "Highlighted Text"])
+def extract_highlighted_text_with_line_numbers(doc_file):
+    highlighted_text_with_lines = {}
+    for page_index in range(len(doc_file)):
+        page = doc_file[page_index]
+        text_blocks = page.get_text("blocks")
+        if page.annots():
+            for annot in page.annots():
+                annot_rect = annot.rect
+                annot_center = [(annot_rect[0] + annot_rect[2]) / 2, (annot_rect[1] + annot_rect[3]) / 2]
+                text = page.get_text("words", clip=annot_rect)
+                content = " ".join([word[4] for word in text])
+                line_numbers = [i + 1 for i, block in enumerate(text_blocks) if
+                                block[0] <= annot_center[0] <= block[2] and block[1] <= annot_center[1] <= block[3]]
+                if content not in highlighted_text_with_lines:
+                    highlighted_text_with_lines[content] = {'pages': [page_index + 1], 'lines': line_numbers}
+                else:
+                    highlighted_text_with_lines[content]['pages'].append(page_index + 1)
+                    for line_number in line_numbers:
+                        if line_number not in highlighted_text_with_lines[content]['lines']:
+                            highlighted_text_with_lines[content]['lines'].extend(line_numbers)
+    return highlighted_text_with_lines
 
-for text, pages in highlighted_text.items():
-    new_row = pd.DataFrame({"Page": [pages], "Highlighted Text": [text]})
-    highlighted_text_df = pd.concat([highlighted_text_df, new_row], ignore_index=True)
 
-highlighted_text_df.to_csv(output_path + "highlighted_text.csv", index=False)
-print(highlighted_text_df.head())
+def save_highlighted_text(hg_content, op_path):
+    highlighted_text_list = []
+    for content, details in hg_content.items():
+        for page, lines in zip(details['pages'], details['lines']):
+            highlighted_text_list.append({"Page": page, "Line No": lines, "Content": content})
+
+    highlighted_text_df = pd.DataFrame(highlighted_text_list)
+    highlighted_text_df.to_csv(op_path + "hg_content.csv", index=False)
+    print(highlighted_text_df.head())
+    return highlighted_text_list
+
+
+if __name__ == "__main__":
+    highlighted_text = extract_highlighted_text_with_line_numbers(doc)
+    print(highlighted_text)
+    save_highlighted_text(highlighted_text, output_path)
