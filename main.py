@@ -44,7 +44,7 @@ def save_highlighted_text(hg_content, op_path):
             highlighted_text_list.append({"Page": page, "Line No": lines, "Content": content})
 
     highlighted_text_df = pd.DataFrame(highlighted_text_list)
-    highlighted_text_df.to_csv(op_path + "hg_content.csv", index=False)
+    highlighted_text_df.to_csv(op_path + "highlighted_content.csv", index=False)
     print(highlighted_text_df.head())
     return highlighted_text_list
 
