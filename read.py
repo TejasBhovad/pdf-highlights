@@ -1,10 +1,8 @@
-from typing import Hashable
-
 import pandas as pd
 import os
 
 csv_path = "output/highlighted_content.csv"
-#  id doesnt exist err
+
 if not os.path.exists(csv_path):
     print("File does not exist")
     exit()
@@ -15,7 +13,6 @@ print(df.head(20))
 LINE_BUFFER = 6  # Define the line buffer limit
 content_clusters = []  # Initialize the list to hold clusters
 
-index: Hashable
 for index, row in df.iterrows():
     content = row["Content"]
     line_no = row["Line No"]
@@ -37,8 +34,13 @@ for index, row in df.iterrows():
             # New page, always start a new cluster
             content_clusters.append([content])
 
-for cluster_index, cluster_contents in enumerate(content_clusters):
-    print(f"Cluster {cluster_index + 1}:")
-    for content in cluster_contents:
-        print(f"    {content}")
+md_file_path = "output/highlighted_content.md"
+with open(md_file_path, "w", encoding="utf-8") as md_file:
+    md_file.write("# Highlighted Content\n\n")
+    for cluster_index, cluster_contents in enumerate(content_clusters):
+        md_file.write(f"## Cluster {cluster_index + 1}\n\n")
+        for content in cluster_contents:
+            md_file.write(f"- {content}\n")
+        md_file.write("\n")
 
+print(f"MD file created: {md_file_path}")
