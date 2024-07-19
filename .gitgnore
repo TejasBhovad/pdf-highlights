@@ -201,3 +201,5 @@ fabric.properties
 .idea
 
 app/static/
+
+/assets/
