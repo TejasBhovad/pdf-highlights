@@ -26,10 +26,11 @@ http://127.0.0.1:5000/generate-md?pdf_path=sample.pdf
 ## Todo
 - [x] Extract highlighted text from a PDF file.
 - [x] Save the extracted text to a CSV file.
-- [ ] Create a markdown flavored PDF file for download.
-- [ ] Add a flask EndPoint to upload a PDF file and return the extracted annotations.
+- [x] Create a markdown flavored PDF file for download.
+- [x] Add a flask EndPoint to upload a PDF file and return the extracted annotations.
 - [ ] organize the code using classes.
-- [ ] Add a GUI for the application(using Svelte)
+- [ ] Add a GUI for the application(using Svelte/astro)
+- [ ] Add feature to only show pages which have annotations.
 
 ## References
 https://pymupdf.readthedocs.io/en/latest/recipes-annotations.html#annotations
