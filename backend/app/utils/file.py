@@ -207,3 +207,32 @@ def generate_clustered_content_pdf(csv_path: str, pdf_file_path: str):
     pdf_document.close()
 
     print(f"PDF file created: {pdf_file_path}")
+
+
+# funcn to only keep pages with highlights annotations and return page numbers list of those pages
+def get_highlighted_pages(doc_file):
+    highlighted_pages = []
+    for page_index in range(len(doc_file)):
+        page = doc_file[page_index]
+        if page.annots():
+            for annot in page.annots():
+                if annot.type[0] == 8:  # Check if the annotation is a highlight (type 8)
+                    highlighted_pages.append(page_index + 1)
+                    break  # No need to check further annotations on this page
+    return highlighted_pages
+
+
+# fucntion to extract on pages with page no from given list of pages
+def extract_highlighted_text_with_line_numbers_on_pages(doc_file, pages_list, output_pdf_path):
+    # Create a new PDF document
+    new_pdf = pymupdf.open()
+
+    # Add only the specified pages to the new PDF
+    for page_index in pages_list:
+        new_pdf.insert_pdf(doc_file, from_page=page_index - 1, to_page=page_index - 1)
+
+    # Save the new PDF
+    new_pdf.save(output_pdf_path)
+    new_pdf.close()
+
+    print(f"New PDF file created: {output_pdf_path}")
