@@ -1,6 +1,7 @@
-import os
-import pymupdf
+from io import BytesIO
+
 import pandas as pd
+import pymupdf
 
 
 def extract_highlighted_text_with_line_numbers(doc_file):
@@ -26,25 +27,12 @@ def extract_highlighted_text_with_line_numbers(doc_file):
     return highlighted_text_with_lines
 
 
-def save_highlighted_csv(hg_content, op_path):
-    highlighted_text_list = []
-    for content, details in hg_content.items():
-        for page, lines in zip(details['pages'], details['lines']):
-            highlighted_text_list.append({"Page": page, "Line No": lines, "Content": content})
+def generate_clustered_content_md(csv_data):
+    if not csv_data:
+        print("No data to generate Markdown")
+        return BytesIO()  # Return an empty BytesIO object
 
-    highlighted_text_df = pd.DataFrame(highlighted_text_list)
-    highlighted_text_df.to_csv(op_path + "highlighted_content.csv", index=False)
-    # print(highlighted_text_df.head())
-    return highlighted_text_list
-
-
-def generate_clustered_content_md(csv_path: str, md_file_path: str):
-    if not os.path.exists(csv_path):
-        print("File does not exist")
-        return
-
-    df = pd.read_csv(csv_path)
-    # print(df.head(20))
+    df = pd.DataFrame(csv_data)
 
     LINE_BUFFER = 6
     content_clusters = []
@@ -87,24 +75,26 @@ def generate_clustered_content_md(csv_path: str, md_file_path: str):
 
         return "\n".join(lines)
 
-    with open(md_file_path, "w", encoding="utf-8") as md_file:
-        md_file.write("# Highlighted Content\n\n")
-        for cluster_index, cluster_contents in enumerate(content_clusters):
-            for content in cluster_contents:
-                wrapped_content = wrap_text(content, 80)
-                md_file.write(f"- {wrapped_content}\n")
-            md_file.write("\n")
+    # Create a BytesIO object for the Markdown content
+    md_output = BytesIO()
+    md_output.write(b"# Highlighted Content\n\n")
 
-    print(f"MD file created: {md_file_path}")
+    for cluster_index, cluster_contents in enumerate(content_clusters):
+        for content in cluster_contents:
+            wrapped_content = wrap_text(content, 80)
+            md_output.write(f"- {wrapped_content}\n".encode('utf-8'))
+        md_output.write(b"\n")
 
+    # Move the cursor of the BytesIO object to the beginning
+    md_output.seek(0)
+    return md_output
 
-def generate_clustered_content_pdf(csv_path: str, pdf_file_path: str):
-    if not os.path.exists(csv_path):
-        print("File does not exist")
+def generate_clustered_content_pdf(csv_data, output_pdf):
+    if not csv_data:
+        print("No data to generate PDF")
         return
 
-    df = pd.read_csv(csv_path)
-    # print(df.head(20))
+    df = pd.DataFrame(csv_data)
 
     LINE_BUFFER = 6
     content_clusters = []
@@ -185,10 +175,19 @@ def generate_clustered_content_pdf(csv_path: str, pdf_file_path: str):
         page.insert_text((LEFT_MARGIN, y_position), content_text, fontname="helv", fontsize=CONTENT_FONT_SIZE)
         y_position += content_height + CLUSTER_SPACING
 
-    pdf_document.save(pdf_file_path)
+    pdf_document.save(output_pdf)
     pdf_document.close()
 
-    print(f"PDF file created: {pdf_file_path}")
+    print("PDF file created in memory")
+
+
+def save_highlighted_csv(hg_content):
+    highlighted_text_list = []
+    for content, details in hg_content.items():
+        for page, lines in zip(details['pages'], details['lines']):
+            highlighted_text_list.append({"Page": page, "Line No": lines, "Content": content})
+
+    return highlighted_text_list
 
 
 def get_highlighted_pages(doc_file):

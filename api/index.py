@@ -1,11 +1,10 @@
 import logging
-import os
 from io import BytesIO
 
 import pymupdf
 import requests
 from flask import Flask, send_file
-from flask import jsonify, request, url_for
+from flask import jsonify, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -32,27 +31,33 @@ def generate_md():
     if not pdf_path:
         return jsonify({"error": "PDF path is required"}), 400
 
-    pdf_full_path = pdf_path
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.join(base_dir, 'static', 'highlighted_content.csv')
-    md_file_path = os.path.join(base_dir, 'static', 'highlighted_content.md')
-
     try:
-        if not os.path.exists(pdf_full_path):
-            raise FileNotFoundError(f"The specified PDF file '{pdf_full_path}' was not found.")
+        # Load PDF from S3 URL
+        response = requests.get(pdf_path)
+        if response.status_code != 200:
+            raise Exception(f"Failed to load PDF from {pdf_path}. Status code: {response.status_code}")
 
-        doc = pymupdf.open(pdf_full_path)
+        pdf_file = BytesIO(response.content)
+
+        # Open the PDF document
+        doc = pymupdf.open(stream=pdf_file, filetype="pdf")
         highlighted_text = extract_highlighted_text_with_line_numbers(doc)
-        save_highlighted_csv(highlighted_text, os.path.join(base_dir, 'static/'))
-        generate_clustered_content_md(csv_path, md_file_path)
-    except FileNotFoundError as e:
-        logging.error(f"FileNotFoundError: {str(e)}")
-        return jsonify({"error": str(e)}), 404
+
+        # Save highlighted text to CSV in memory
+        csv_data = save_highlighted_csv(highlighted_text)
+
+        # Generate Markdown content in memory
+        md_output = generate_clustered_content_md(csv_data)
+        # print md in string format
+        md_file_content = md_output.getvalue().decode('utf-8')
+        print("Markdown content created in memory")
+        # Return the Markdown as a response
+        return send_file(md_output, as_attachment=True, download_name='highlighted_content.md',
+                         mimetype='text/markdown')
+
     except Exception as e:
         logging.error(f"Unexpected error: {str(e)}")
         return jsonify({"error": "An unexpected error occurred."}), 500
-
-    return jsonify({"url": url_for('static', filename='highlighted_content.md', _external=True)})
 
 
 @app.route('/api/generate-pdf')
@@ -62,27 +67,37 @@ def generate_pdf():
     if not pdf_path:
         return jsonify({"error": "PDF path is required"}), 400
 
-    pdf_full_path = pdf_path
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.join(base_dir, 'static', 'highlighted_content.csv')
-    pdf_file_path = os.path.join(base_dir, 'static', 'highlighted_content.pdf')
-
     try:
-        if not os.path.exists(pdf_full_path):
-            raise FileNotFoundError(f"The specified PDF file '{pdf_full_path}' was not found.")
+        # Load PDF from S3 URL
+        response = requests.get(pdf_path)
+        if response.status_code != 200:
+            raise Exception(f"Failed to load PDF from {pdf_path}. Status code: {response.status_code}")
 
-        doc = pymupdf.open(pdf_full_path)
+        pdf_file = BytesIO(response.content)
+
+        # Open the PDF document
+        doc = pymupdf.open(stream=pdf_file, filetype="pdf")
         highlighted_text = extract_highlighted_text_with_line_numbers(doc)
-        save_highlighted_csv(highlighted_text, os.path.join(base_dir, 'static/'))
-        generate_clustered_content_pdf(csv_path, pdf_file_path)
-    except FileNotFoundError as e:
-        logging.error(f"FileNotFoundError: {str(e)}")
-        return jsonify({"error": str(e)}), 404
+
+        # Create a BytesIO object for the output PDF
+        output_pdf = BytesIO()
+
+        # Save highlighted text to a CSV in memory
+        csv_data = save_highlighted_csv(highlighted_text)
+
+        # Generate the clustered content PDF in memory
+        generate_clustered_content_pdf(csv_data, output_pdf)
+
+        # Move the cursor of the BytesIO object to the beginning
+        output_pdf.seek(0)
+
+        # Return the PDF as a response
+        return send_file(output_pdf, as_attachment=True, download_name='highlighted_content.pdf',
+                         mimetype='application/pdf')
+
     except Exception as e:
         logging.error(f"Unexpected error: {str(e)}")
         return jsonify({"error": "An unexpected error occurred."}), 500
-
-    return jsonify({"url": url_for('static', filename='highlighted_content.pdf', _external=True)})
 
 
 @app.route('/api/get-highlighted-page')
