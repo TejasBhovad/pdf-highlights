@@ -110,9 +110,9 @@ def get_highlighted_page():
     return jsonify({"url": url_for('static', filename='highlighted_content.pdf', _external=True)})
 
 
-# @app.route('/api/')
-# def hello_world():
-#     return 'Hello, World'
+@app.route('/api/')
+def hello_world():
+    return 'Hello, World'
 
 
 if __name__ == '__main__':
