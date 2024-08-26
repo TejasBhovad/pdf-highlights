@@ -20,8 +20,9 @@ python main.py
 
 Testing 
 ```bash
-http://127.0.0.1:5000/generate-md?pdf_path=sample.pdf
+curl "http://127.0.0.1:5000/api/get-highlighted-page?pdf_path=<pdf_path>"
 ```
+ 
 
 ## Todo
 - [x] Extract highlighted text from a PDF file.
