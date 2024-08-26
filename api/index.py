@@ -83,6 +83,13 @@ def generate_pdf():
     return jsonify({"url": url_for('static', filename='highlighted_content.pdf', _external=True)})
 
 
+from flask import jsonify, request, url_for
+import logging
+import pymupdf
+import requests
+from io import BytesIO
+import os
+
 @app.route('/api/get-highlighted-page')
 @limiter.limit("5 per minute")  # Rate limit
 def get_highlighted_page():
@@ -90,7 +97,6 @@ def get_highlighted_page():
     if not pdf_path:
         return jsonify({"error": "PDF path is required"}), 400
 
-    # Assuming pdf_path is an S3 URL
     try:
         # Load PDF from S3 URL
         response = requests.get(pdf_path)
@@ -101,35 +107,30 @@ def get_highlighted_page():
 
         # Open the PDF document
         doc = pymupdf.open(stream=pdf_file, filetype="pdf")
-        if not doc.is_pdf:
-            raise Exception("The file is not a valid PDF document.")
 
         pages_list = get_highlighted_pages(doc)
         if not pages_list:
             return jsonify({"error": "No highlighted pages found."}), 404
 
+        # Ensure the static directory exists
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        pdf_file_path = os.path.join(base_dir, 'static', 'highlighted_content.pdf')
+        static_dir = os.path.join(base_dir, 'static')
+        if not os.path.exists(static_dir):
+            os.makedirs(static_dir)
 
+        pdf_file_path = os.path.join(static_dir, 'highlighted_content.pdf')
+
+        # Extract highlighted text and save to the PDF file
         extract_highlighted_text_with_line_numbers_on_pages(doc, pages_list, pdf_file_path)
+
     except FileNotFoundError as e:
         logging.error(f"FileNotFoundError: {str(e)}")
         return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        logging.error(f"Unexpected error: {str(e)}")
-        return jsonify({"error": "An unexpected error occurred."}), 500
-    except FileNotFoundError as e:
-        logging.error(f"FileNotFoundError: {str(e)}")
-        return jsonify({"error": str(e)}), 404
-    except Exception as e:
-        logging.error(f"Unexpected error: {str(e)}")
-        return jsonify({"error": "An unexpected error occurred."}), 500
     except Exception as e:
         logging.error(f"Unexpected error: {str(e)}")
         return jsonify({"error": "An unexpected error occurred."}), 500
 
     return jsonify({"url": url_for('static', filename='highlighted_content.pdf', _external=True)})
-
 @app.route('/api/')
 def hello_world():
     return 'Hello, World'
