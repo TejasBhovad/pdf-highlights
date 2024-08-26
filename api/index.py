@@ -1,3 +1,6 @@
+from io import BytesIO
+
+import requests
 from flask import Flask, request, url_for, jsonify
 import os
 import pymupdf
@@ -19,30 +22,23 @@ limiter = Limiter(key_func=get_remote_address)
 # Set up logging
 logging.basicConfig(level=logging.ERROR)
 
-# Create an uploads directory if it doesn't exist
-UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-
-@app.route('/api/generate-md', methods=['POST'])
+@app.route('/api/generate-md')
 @limiter.limit("5 per minute")  # Rate limit
 def generate_md():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
+    pdf_path = request.args.get('pdf_path')
+    if not pdf_path:
+        return jsonify({"error": "PDF path is required"}), 400
 
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
-
-    # Save the uploaded file to the uploads directory
-    pdf_full_path = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(pdf_full_path)
-
+    pdf_full_path = pdf_path
     base_dir = os.path.dirname(os.path.abspath(__file__))
     csv_path = os.path.join(base_dir, 'static', 'highlighted_content.csv')
     md_file_path = os.path.join(base_dir, 'static', 'highlighted_content.md')
 
     try:
+        if not os.path.exists(pdf_full_path):
+            raise FileNotFoundError(f"The specified PDF file '{pdf_full_path}' was not found.")
+
         doc = pymupdf.open(pdf_full_path)
         highlighted_text = extract_highlighted_text_with_line_numbers(doc)
         save_highlighted_csv(highlighted_text, os.path.join(base_dir, 'static/'))
@@ -57,25 +53,22 @@ def generate_md():
     return jsonify({"url": url_for('static', filename='highlighted_content.md', _external=True)})
 
 
-@app.route('/api/generate-pdf', methods=['POST'])
+@app.route('/api/generate-pdf')
 @limiter.limit("5 per minute")  # Rate limit
 def generate_pdf():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
+    pdf_path = request.args.get('pdf_path')
+    if not pdf_path:
+        return jsonify({"error": "PDF path is required"}), 400
 
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
-
-    # Save the uploaded file to the uploads directory
-    pdf_full_path = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(pdf_full_path)
-
+    pdf_full_path = pdf_path
     base_dir = os.path.dirname(os.path.abspath(__file__))
     csv_path = os.path.join(base_dir, 'static', 'highlighted_content.csv')
     pdf_file_path = os.path.join(base_dir, 'static', 'highlighted_content.pdf')
 
     try:
+        if not os.path.exists(pdf_full_path):
+            raise FileNotFoundError(f"The specified PDF file '{pdf_full_path}' was not found.")
+
         doc = pymupdf.open(pdf_full_path)
         highlighted_text = extract_highlighted_text_with_line_numbers(doc)
         save_highlighted_csv(highlighted_text, os.path.join(base_dir, 'static/'))
@@ -90,28 +83,34 @@ def generate_pdf():
     return jsonify({"url": url_for('static', filename='highlighted_content.pdf', _external=True)})
 
 
-@app.route('/api/get-highlighted-page', methods=['POST'])
+@app.route('/api/get-highlighted-page')
 @limiter.limit("5 per minute")  # Rate limit
 def get_highlighted_page():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
+    pdf_path = request.args.get('pdf_path')
+    if not pdf_path:
+        return jsonify({"error": "PDF path is required"}), 400
 
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
-
-    # Save the uploaded file to the uploads directory
-    pdf_full_path = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(pdf_full_path)
-
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    pdf_file_path = os.path.join(base_dir, 'static', 'highlighted_content.pdf')
-
+    # Assuming pdf_path is an S3 URL
     try:
-        doc = pymupdf.open(pdf_full_path)
+        # Load PDF from S3 URL
+        response = requests.get(pdf_path)
+        if response.status_code != 200:
+            raise Exception(f"Failed to load PDF from {pdf_path}. Status code: {response.status_code}")
+
+        pdf_file = BytesIO(response.content)
+
+        # Open the PDF document
+        doc = pymupdf.open(stream=pdf_file, filetype="pdf")
+        if not doc.is_pdf:
+            raise Exception("The file is not a valid PDF document.")
+
         pages_list = get_highlighted_pages(doc)
         if not pages_list:
             return jsonify({"error": "No highlighted pages found."}), 404
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        pdf_file_path = os.path.join(base_dir, 'static', 'highlighted_content.pdf')
+
         extract_highlighted_text_with_line_numbers_on_pages(doc, pages_list, pdf_file_path)
     except FileNotFoundError as e:
         logging.error(f"FileNotFoundError: {str(e)}")
@@ -119,9 +118,17 @@ def get_highlighted_page():
     except Exception as e:
         logging.error(f"Unexpected error: {str(e)}")
         return jsonify({"error": "An unexpected error occurred."}), 500
+    except FileNotFoundError as e:
+        logging.error(f"FileNotFoundError: {str(e)}")
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        logging.error(f"Unexpected error: {str(e)}")
+        return jsonify({"error": "An unexpected error occurred."}), 500
+    except Exception as e:
+        logging.error(f"Unexpected error: {str(e)}")
+        return jsonify({"error": "An unexpected error occurred."}), 500
 
     return jsonify({"url": url_for('static', filename='highlighted_content.pdf', _external=True)})
-
 
 @app.route('/api/')
 def hello_world():
