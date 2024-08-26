@@ -3,7 +3,7 @@ import os
 import pymupdf
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from backend.app.utils.file import (
+from api.utils.file import (
     generate_clustered_content_md,
     extract_highlighted_text_with_line_numbers,
     save_highlighted_csv,
