@@ -19,23 +19,30 @@ limiter = Limiter(key_func=get_remote_address)
 # Set up logging
 logging.basicConfig(level=logging.ERROR)
 
+# Create an uploads directory if it doesn't exist
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-@app.route('/api/generate-md')
+
+@app.route('/api/generate-md', methods=['POST'])
 @limiter.limit("5 per minute")  # Rate limit
 def generate_md():
-    pdf_path = request.args.get('pdf_path')
-    if not pdf_path:
-        return jsonify({"error": "PDF path is required"}), 400
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
 
-    pdf_full_path = pdf_path
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    # Save the uploaded file to the uploads directory
+    pdf_full_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(pdf_full_path)
+
     base_dir = os.path.dirname(os.path.abspath(__file__))
     csv_path = os.path.join(base_dir, 'static', 'highlighted_content.csv')
     md_file_path = os.path.join(base_dir, 'static', 'highlighted_content.md')
 
     try:
-        if not os.path.exists(pdf_full_path):
-            raise FileNotFoundError(f"The specified PDF file '{pdf_full_path}' was not found.")
-
         doc = pymupdf.open(pdf_full_path)
         highlighted_text = extract_highlighted_text_with_line_numbers(doc)
         save_highlighted_csv(highlighted_text, os.path.join(base_dir, 'static/'))
@@ -50,22 +57,25 @@ def generate_md():
     return jsonify({"url": url_for('static', filename='highlighted_content.md', _external=True)})
 
 
-@app.route('/api/generate-pdf')
+@app.route('/api/generate-pdf', methods=['POST'])
 @limiter.limit("5 per minute")  # Rate limit
 def generate_pdf():
-    pdf_path = request.args.get('pdf_path')
-    if not pdf_path:
-        return jsonify({"error": "PDF path is required"}), 400
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
 
-    pdf_full_path = pdf_path
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    # Save the uploaded file to the uploads directory
+    pdf_full_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(pdf_full_path)
+
     base_dir = os.path.dirname(os.path.abspath(__file__))
     csv_path = os.path.join(base_dir, 'static', 'highlighted_content.csv')
     pdf_file_path = os.path.join(base_dir, 'static', 'highlighted_content.pdf')
 
     try:
-        if not os.path.exists(pdf_full_path):
-            raise FileNotFoundError(f"The specified PDF file '{pdf_full_path}' was not found.")
-
         doc = pymupdf.open(pdf_full_path)
         highlighted_text = extract_highlighted_text_with_line_numbers(doc)
         save_highlighted_csv(highlighted_text, os.path.join(base_dir, 'static/'))
@@ -80,21 +90,24 @@ def generate_pdf():
     return jsonify({"url": url_for('static', filename='highlighted_content.pdf', _external=True)})
 
 
-@app.route('/api/get-highlighted-page')
+@app.route('/api/get-highlighted-page', methods=['POST'])
 @limiter.limit("5 per minute")  # Rate limit
 def get_highlighted_page():
-    pdf_path = request.args.get('pdf_path')
-    if not pdf_path:
-        return jsonify({"error": "PDF path is required"}), 400
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
 
-    pdf_full_path = pdf_path
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    # Save the uploaded file to the uploads directory
+    pdf_full_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(pdf_full_path)
+
     base_dir = os.path.dirname(os.path.abspath(__file__))
     pdf_file_path = os.path.join(base_dir, 'static', 'highlighted_content.pdf')
 
     try:
-        if not os.path.exists(pdf_full_path):
-            raise FileNotFoundError(f"The specified PDF file '{pdf_full_path}' was not found.")
-
         doc = pymupdf.open(pdf_full_path)
         pages_list = get_highlighted_pages(doc)
         if not pages_list:
