@@ -1,104 +1,118 @@
-from flask import Flask, request
+from flask import Flask, request, url_for, jsonify
 import os
 import pymupdf
-from backend.app.utils.file import generate_clustered_content_md, extract_highlighted_text_with_line_numbers, \
-    save_highlighted_text, generate_clustered_content_pdf, get_highlighted_pages, \
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from backend.app.utils.file import (
+    generate_clustered_content_md,
+    extract_highlighted_text_with_line_numbers,
+    save_highlighted_csv,
+    generate_clustered_content_pdf,
+    get_highlighted_pages,
     extract_highlighted_text_with_line_numbers_on_pages
+)
+import logging
 
 app = Flask(__name__)
+limiter = Limiter(key_func=get_remote_address)
+
+# Set up logging
+logging.basicConfig(level=logging.ERROR)
 
 
-@app.route('/generate-md')
+@app.route('/api/generate-md')
+@limiter.limit("5 per minute")  # Rate limit
 def generate_md():
-    # Retrieve the PDF file path from query parameters
     pdf_path = request.args.get('pdf_path')
     if not pdf_path:
-        return "PDF path is required", 400
+        return jsonify({"error": "PDF path is required"}), 400
 
-    # Directly use the pdf_path as it's expected to be an absolute path
     pdf_full_path = pdf_path
-
-    # Define paths for CSV and MD files relative to the base directory
     base_dir = os.path.dirname(os.path.abspath(__file__))
     csv_path = os.path.join(base_dir, 'static', 'highlighted_content.csv')
     md_file_path = os.path.join(base_dir, 'static', 'highlighted_content.md')
 
-    # Extract highlighted text from PDF and save to CSV
     try:
+        if not os.path.exists(pdf_full_path):
+            raise FileNotFoundError(f"The specified PDF file '{pdf_full_path}' was not found.")
+
         doc = pymupdf.open(pdf_full_path)
         highlighted_text = extract_highlighted_text_with_line_numbers(doc)
-        save_highlighted_text(highlighted_text, os.path.join(base_dir, 'static/'))
-
-        # Generate Markdown from CSV
+        save_highlighted_csv(highlighted_text, os.path.join(base_dir, 'static/'))
         generate_clustered_content_md(csv_path, md_file_path)
+    except FileNotFoundError as e:
+        logging.error(f"FileNotFoundError: {str(e)}")
+        return jsonify({"error": str(e)}), 404
     except Exception as e:
-        return str(e)
+        logging.error(f"Unexpected error: {str(e)}")
+        return jsonify({"error": "An unexpected error occurred."}), 500
 
-    return f"MD file created: {md_file_path}"
+    return jsonify({"url": url_for('static', filename='highlighted_content.md', _external=True)})
 
 
-@app.route('/generate-pdf')
+@app.route('/api/generate-pdf')
+@limiter.limit("5 per minute")  # Rate limit
 def generate_pdf():
-    # Retrieve the PDF file path from query parameters
     pdf_path = request.args.get('pdf_path')
     if not pdf_path:
-        return "PDF path is required", 400
+        return jsonify({"error": "PDF path is required"}), 400
 
-    # Directly use the pdf_path as it's expected to be an absolute path
     pdf_full_path = pdf_path
-
-    # Define paths for CSV and PDF files relative to the base directory
     base_dir = os.path.dirname(os.path.abspath(__file__))
     csv_path = os.path.join(base_dir, 'static', 'highlighted_content.csv')
     pdf_file_path = os.path.join(base_dir, 'static', 'highlighted_content.pdf')
 
-    # Generate PDF from CSV
     try:
+        if not os.path.exists(pdf_full_path):
+            raise FileNotFoundError(f"The specified PDF file '{pdf_full_path}' was not found.")
+
         doc = pymupdf.open(pdf_full_path)
         highlighted_text = extract_highlighted_text_with_line_numbers(doc)
-        save_highlighted_text(highlighted_text, os.path.join(base_dir, 'static/'))
+        save_highlighted_csv(highlighted_text, os.path.join(base_dir, 'static/'))
         generate_clustered_content_pdf(csv_path, pdf_file_path)
+    except FileNotFoundError as e:
+        logging.error(f"FileNotFoundError: {str(e)}")
+        return jsonify({"error": str(e)}), 404
     except Exception as e:
-        return str(e)
+        logging.error(f"Unexpected error: {str(e)}")
+        return jsonify({"error": "An unexpected error occurred."}), 500
 
-    return f"PDF file created: {pdf_file_path}"
+    return jsonify({"url": url_for('static', filename='highlighted_content.pdf', _external=True)})
 
 
-@app.route('/get-highlighted-page')
-# here get page list and export it to pdf
+@app.route('/api/get-highlighted-page')
+@limiter.limit("5 per minute")  # Rate limit
 def get_highlighted_page():
-    # Retrieve the PDF file path from query parameters
     pdf_path = request.args.get('pdf_path')
     if not pdf_path:
-        return "PDF path is required", 400
+        return jsonify({"error": "PDF path is required"}), 400
 
-    # Directly use the pdf_path as it's expected to be an absolute path
     pdf_full_path = pdf_path
-
-    # Define paths for CSV and PDF files relative to the base directory
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.join(base_dir, 'static', 'highlighted_content.csv')
     pdf_file_path = os.path.join(base_dir, 'static', 'highlighted_content.pdf')
 
-    # Generate PDF from CSV
     try:
+        if not os.path.exists(pdf_full_path):
+            raise FileNotFoundError(f"The specified PDF file '{pdf_full_path}' was not found.")
+
         doc = pymupdf.open(pdf_full_path)
-        # highlighted_text = extract_highlighted_text_with_line_numbers(doc)
-        # save_highlighted_text(highlighted_text, os.path.join(base_dir, 'static/'))
-        # generate_clustered_content_pdf(csv_path, pdf_file_path)
         pages_list = get_highlighted_pages(doc)
-        print(pages_list)
-    #     call extract_highlighted_text_with_line_numbers_on_pages
-        extract_highlighted_text_with_line_numbers_on_pages(doc, pages_list,pdf_file_path)
+        if not pages_list:
+            return jsonify({"error": "No highlighted pages found."}), 404
+        extract_highlighted_text_with_line_numbers_on_pages(doc, pages_list, pdf_file_path)
+    except FileNotFoundError as e:
+        logging.error(f"FileNotFoundError: {str(e)}")
+        return jsonify({"error": str(e)}), 404
     except Exception as e:
-        return str(e)
+        logging.error(f"Unexpected error: {str(e)}")
+        return jsonify({"error": "An unexpected error occurred."}), 500
 
-    return f"PDF file created: {pdf_file_path}"
+    return jsonify({"url": url_for('static', filename='highlighted_content.pdf', _external=True)})
 
 
-@app.route('/')
-def hello_world():
-    return 'Hello, World'
+# @app.route('/api/')
+# def hello_world():
+#     return 'Hello, World'
 
 
 if __name__ == '__main__':
