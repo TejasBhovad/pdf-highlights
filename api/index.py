@@ -1,6 +1,6 @@
 import logging
 from io import BytesIO
-
+from flask_cors import CORS
 import pymupdf
 import requests
 from flask import Flask, send_file
@@ -18,6 +18,7 @@ from api.utils.file import (
 )
 
 app = Flask(__name__)
+CORS(app)
 limiter = Limiter(key_func=get_remote_address)
 
 # Set up logging
