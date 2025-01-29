@@ -79,6 +79,8 @@ def generate_pdf():
         # Open the PDF document
         doc = pymupdf.open(stream=pdf_file, filetype="pdf")
         highlighted_text = extract_highlighted_text_with_line_numbers(doc)
+        if not highlighted_text:
+            return jsonify({"error": "No highlighted text found."}), 404
 
         # Create a BytesIO object for the output PDF
         output_pdf = BytesIO()
